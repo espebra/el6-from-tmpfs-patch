@@ -1,3 +1,5 @@
+== Doc ==
+ 
 This is a patch used to create EL6 images which will boot with the root file
 system in memory.
 
