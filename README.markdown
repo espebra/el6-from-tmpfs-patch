@@ -10,7 +10,7 @@ Install livecd-tools
 
     $ sudo yum install livecd-tools
 
-Download the kickstart file, or create your own
+Download the kickstart file (centos64-pxe.ks), or create your own
 
 Create the iso file:
 
