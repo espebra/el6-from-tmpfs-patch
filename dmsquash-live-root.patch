@@ -1,0 +1,99 @@
+--- dmsquash-live-root	2013-06-23 19:37:43.000000000 +0200
++++ dmsquash-live-root.patched	2013-06-23 19:45:28.000000000 +0200
+@@ -24,6 +24,8 @@
+ getarg readonly_overlay && readonly_overlay="--readonly" || readonly_overlay=""
+ overlay=$(getarg overlay)
+ 
++getarg toram && toram="yes"
++
+ # FIXME: we need to be able to hide the plymouth splash for the check really
+ [ -e $livedev ] & fs=$(blkid -s TYPE -o value $livedev)
+ if [ "$fs" = "iso9660" -o "$fs" = "udf" ]; then
+@@ -132,7 +134,10 @@
+     BASE_LOOPDEV=$( losetup -f )
+     losetup -r $BASE_LOOPDEV $EXT3FS
+ 
+-    do_live_from_base_loop
++    # Create overlay only if toram is not set
++    if [ -z "$toram" ] ; then
++        do_live_from_base_loop
++    fi
+ fi
+ 
+ # we might have an embedded ext3 on squashfs to use as rootfs (compressed live)
+@@ -163,13 +168,73 @@
+ 
+     umount -l /squashfs
+ 
+-    do_live_from_base_loop
++    # Create overlay only if toram is not set
++    if [ -z "$toram" ] ; then
++        do_live_from_base_loop
++    fi
++fi
++
++# If the kernel parameter toram is set, create a tmpfs device and copy the 
++# filesystem to it. Continue the boot process with this tmpfs device as
++# a writable root device.
++if [ -n "$toram" ] ; then
++    ROOT_IMAGE=$(getarg root)
++    if [ -z "$ROOT_IMAGE" ]; then
++         echo "ERROR: The root parameter was not set."
++         exit
++    fi
++
++    if [ ! -f "$ROOT_IMAGE" ]; then
++         echo "ERROR: The root image ($ROOT_IMAGE) was not found."
++         exit
++    fi
++
++    TMPFS_SIZE=$(getarg size)
++    if [ -z "$TMPFS_SIZE" ]; then
++         echo "INFO: The size boot parameter was not set. Using default [2048]."
++         TMPFS_SIZE=2048
++    fi
++
++    echo "Use root: $ROOT_IMAGE"
++    echo "Create tmpfs of ${TMPFS_SIZE}m."
++    mount tmpfs /sysroot -o size=${TMPFS_SIZE}m,rw -t tmpfs
++    echo "Temporarily mount the root disk image."
++    mkdir x y z
++    mount $ROOT_IMAGE x -o loop
++    mount x/LiveOS/squashfs.img y -o loop
++    mount y/LiveOS/ext3fs.img z -o loop
++    echo "Copy root disk image contents to tmpfs."
++    cp -fapR z/* /sysroot
++    echo "Clean up."
++    umount z
++    umount y
++    umount x
++    umount -l /dev/.initramfs/live
++    echo " > Detach $OSMIN_LOOPDEV"
++    losetup -d $OSMIN_LOOPDEV
++
++    echo " > Detach $OSMIN_SQUASHED_LOOPDEV"
++    losetup -d $OSMIN_SQUASHED_LOOPDEV
++    
++    echo " > Detach $BASE_LOOPDEV"
++    losetup -d $BASE_LOOPDEV
++    
++    echo " > Detach $SQUASHED_LOOPDEV"
++    losetup -d $SQUASHED_LOOPDEV
++    
++    echo " > Detach /dev/loop0"
++    losetup -d /dev/loop0
++
++    > /dev/root
++    exit 0
+ fi
+ 
+ if [ -b "$OSMIN_LOOPDEV" ]; then
+     # set up the devicemapper snapshot device, which will merge
+     # the normal live fs image, and the delta, into a minimzied fs image
+-    echo "0 $( blockdev --getsz $BASE_LOOPDEV ) snapshot $BASE_LOOPDEV $OSMIN_LOOPDEV p 8" | dmsetup create --readonly live-osimg-min
++    if [ -z "$toram" ] ; then
++        echo "0 $( blockdev --getsz $BASE_LOOPDEV ) snapshot $BASE_LOOPDEV $OSMIN_LOOPDEV p 8" | dmsetup create --readonly live-osimg-min
++    fi
+ fi
+ 
+ ROOTFLAGS="$(getarg rootflags)"
