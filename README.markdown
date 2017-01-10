@@ -1,3 +1,5 @@
+OUT OF DATE: Have a look at [this article](http://www.espenbraastad.no/posts/centos-7-rootfs-on-tmpfs/) instead.
+
 Doc
 ===
  
